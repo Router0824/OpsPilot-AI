@@ -1,0 +1,9 @@
+export type Workspace = { id: string; name: string; goal: string; description: string; created_at: string };
+export type Document = { id: string; name: string; kind: string; chunk_count: number; created_at: string };
+export type Memory = { id: string; type: "semantic" | "decision" | "episodic"; content: string; reason: string; source: string; importance: number; created_at: string };
+export type Task = { id: string; title: string; description: string; owner: string; deadline?: string; priority: string; status: "todo" | "in_progress" | "blocked" | "done"; milestone: string; dependencies: string[]; expected_output: string; evidence: string; created_at: string };
+export type Risk = { id: string; risk: string; severity: string; evidence: string; suggested_action: string; status: "open" | "monitoring" | "resolved"; source: string; created_at: string };
+export type AgentRun = { id: string; agent: string; input: string; output: string; latency_ms: number; token_usage: number | null; context_size: number; tool_calls: string[]; retrieval: Citation[]; groundedness: string; status: string; feedback: string | null; created_at: string };
+export type Citation = { source: string; chunk_id: string; excerpt: string; score: number; vector_score?: number; keyword_score?: number };
+export type Dashboard = { workspace: Workspace; counts: Record<string, number>; impact: Record<string, number>; tasks: Task[]; decisions: Memory[]; risks: Risk[]; runs: AgentRun[]; documents: Document[] };
+export type MeetingAnalysis = { summary: string; decisions: { decision: string; reason: string; evidence: string; confidence: number }[]; action_items: { task: string; owner: string; deadline?: string; priority: string; status: string; source: string; evidence: string }[]; risks: { risk: string; severity: string; evidence: string; suggested_action: string; status: string; source: string }[]; follow_up_questions: string[] };

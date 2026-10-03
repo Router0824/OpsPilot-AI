@@ -1,0 +1,11 @@
+"use client";
+
+import { use, useEffect, useState } from "react";
+import { BarChart3 } from "lucide-react";
+import { WorkspaceShell } from "@/components/WorkspaceShell";
+import { PageTitle } from "@/components/PageTitle";
+import { api } from "@/lib/api";
+
+type Analytics={impact:Record<string,number>;operations:{workflow_runs:number;successful_runs:number;average_latency_ms:number|null;human_approval_rate:number|null};assumptions:{meeting_minutes_saved:number;label:string}};
+export default function AnalyticsPage({params}:{params:Promise<{id:string}>}){const{id}=use(params);const[data,setData]=useState<Analytics|null>(null);useEffect(()=>{api<Analytics>(`/api/workspaces/${id}/analytics`).then(setData)},[id]);return <WorkspaceShell id={id} title="Operations Analytics"><div className="page"><PageTitle eyebrow="Operational outcomes" title="Operations Analytics" description="Track workflow throughput and human approval alongside technical run health. Estimates are labelled separately from observed events."/>{!data?<div className="loading">Loading operations metrics…</div>:<><div className="stats-grid">{Object.entries(data.impact).map(([key,value])=><div className="stat-card" key={key}><div className="stat-label">{key.replaceAll('_',' ')}</div><div className="stat-value">{value}</div></div>)}</div><div className="content-grid"><div className="card"><div className="card-header"><h2>Workflow health</h2><BarChart3 size={14}/></div><div className="card-body">{Object.entries(data.operations).map(([key,value])=><div className="list-row" key={key}><h3>{key.replaceAll('_',' ')}</h3><p>{value??'Not available'}{key==='human_approval_rate'&&value!==null?'%':''}</p></div>)}</div></div><div className="card"><div className="card-header"><h2>Estimation policy</h2><span>transparent</span></div><div className="card-body"><div className="stat-value">{data.assumptions.meeting_minutes_saved} min</div><p className="muted">Estimated time saved per approved Meeting Intelligence workflow.</p><div className="demo-badge">{data.assumptions.label}</div></div></div></div></>}</div></WorkspaceShell>}
+
