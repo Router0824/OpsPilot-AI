@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, Bot, ClipboardList, FileText, Gavel, LayoutDashboard, Presentation, Settings, ShieldAlert, Workflow } from "lucide-react";
+import { Activity, BarChart3, Bot, ClipboardList, FileText, Gavel, LayoutDashboard, Presentation, Settings, ShieldAlert, Workflow } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Workspace } from "@/lib/types";
 import { Logo } from "./Logo";
@@ -17,6 +17,7 @@ const nav = [
   ["decisions", "Decisions", Gavel],
   ["risks", "Risk Tracker", ShieldAlert],
   ["automation", "Automation", Workflow],
+  ["activity", "AI Activity", Activity],
   ["analytics", "Operations Analytics", BarChart3],
 ] as const;
 

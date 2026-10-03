@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend tests and migrations
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: sqlite:////tmp/opspilot-ci.db
+      DEMO_MODE: "true"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Install backend dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/pip install -r backend/requirements.txt
+      - name: Verify migrations
+        run: |
+          cd backend
+          ../.venv/bin/alembic -c alembic.ini upgrade head
+          ../.venv/bin/alembic -c alembic.ini check
+      - name: Run backend tests
+        run: cd backend && ../.venv/bin/python -m pytest -q
+      - name: Validate Compose manifests
+        run: |
+          docker compose config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.postgres.yml config --quiet
+
+  frontend:
+    name: Frontend lint and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: apps/web
+      - name: Lint
+        run: npm run lint
+        working-directory: apps/web
+      - name: Build
+        run: npm run build
+        working-directory: apps/web

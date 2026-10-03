@@ -49,7 +49,7 @@ def seed_demo() -> None:
             create_task(db, workspace.id, task)
         create_risk(db, workspace.id, RiskItem(risk="Data access permissions are unresolved.", severity="critical", evidence="Confirm data permissions is blocked, overdue, and has no owner.", suggested_action="Assign a security owner and approve the access matrix before indexing internal data.", source="Risk Detection workflow"))
         create_risk(db, workspace.id, RiskItem(risk="Retrieval acceptance criteria are not yet agreed.", severity="medium", evidence="AI Tool Evaluation requires retrieval validation but defines no threshold.", suggested_action="Set a groundedness and retrieval test threshold before the internal demo.", source="Document review"))
-        db.add(models.AgentRun(workspace_id=workspace.id, agent="Meeting Intelligence", input="Launch kickoff notes", output=json.dumps({"summary": "Team aligned on Azure OpenAI, prototype delivery, knowledge preparation, and data permissions."}), latency_ms=18, context_size=0, tool_calls_json=json.dumps(["create_decision", "create_task", "create_risk"]), groundedness="SUPPORTED", status="completed", feedback="approved"))
+        db.add(models.AgentRun(workspace_id=workspace.id, agent="Meeting Intelligence", workflow="meeting_intelligence", input_type="meeting_notes", input="Launch kickoff notes", output=json.dumps({"summary": "Team aligned on Azure OpenAI, prototype delivery, knowledge preparation, and data permissions."}), latency_ms=18, context_size=0, tool_calls_json=json.dumps(["create_decision", "create_task", "create_risk"]), groundedness="SUPPORTED", status="completed", human_approved=True))
         db.commit()
     finally:
         db.close()

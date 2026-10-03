@@ -4,7 +4,7 @@ from collections import Counter
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import desc, func, select, text
 from sqlalchemy.orm import Session
 
@@ -98,7 +98,7 @@ def dashboard(workspace_id: str, db: Session = Depends(get_db)) -> dict:
     return {
         "workspace": _row(workspace),
         "counts": {"documents": len(documents), "memories": len(memories), "active_tasks": task_counts["todo"] + task_counts["in_progress"], "blocked_tasks": task_counts["blocked"], "completed_tasks": task_counts["done"], "open_risks": sum(risk.status != "resolved" for risk in risks), "decisions": len(decisions), "agent_runs": len(all_runs)},
-        "impact": {"meetings_processed": sum(run.agent == "Meeting Intelligence" for run in all_runs), "tasks_auto_generated": sum(task.evidence == "Generated from Meeting" for task in tasks), "decisions_captured": len(decisions), "documents_indexed": len(documents), "workflow_runs": len(all_runs), "estimated_minutes_saved": sum(run.agent == "Meeting Intelligence" and run.feedback == "approved" for run in all_runs) * 10},
+        "impact": {"meetings_processed": sum(run.workflow == "meeting_intelligence" for run in all_runs), "tasks_auto_generated": sum(task.evidence == "Generated from Meeting" for task in tasks), "decisions_captured": len(decisions), "documents_indexed": len(documents), "workflow_runs": len(all_runs), "estimated_minutes_saved": sum(run.workflow == "meeting_intelligence" and run.human_approved is True for run in all_runs) * 10},
         "tasks": [_row(task) for task in tasks],
         "decisions": [_row(item) for item in decisions[:5]],
         "risks": [_row(item) for item in risks[:5]],
@@ -214,7 +214,7 @@ def meeting_analyze(workspace_id: str, payload: MeetingInput, db: Session = Depe
     started = time.perf_counter()
     analysis, token_usage = analyze_meeting(payload.notes)
     latency_ms = int((time.perf_counter() - started) * 1000)
-    run = models.AgentRun(workspace_id=workspace_id, agent="Meeting Intelligence", input=payload.notes, output=analysis.model_dump_json(), latency_ms=latency_ms, token_usage=token_usage, context_size=0, tool_calls_json=json.dumps(["create_decision", "create_task", "create_risk"]), groundedness="SUPPORTED", status="pending_review")
+    run = models.AgentRun(workspace_id=workspace_id, agent="Meeting Intelligence", workflow="meeting_intelligence", input_type="meeting_notes", input=payload.notes, output=analysis.model_dump_json(), latency_ms=latency_ms, token_usage=token_usage, context_size=0, tool_calls_json=json.dumps(["create_decision", "create_task", "create_risk"]), groundedness="SUPPORTED", status="pending_review")
     db.add(run)
     db.commit()
     return {"run_id": run.id, "analysis": analysis.model_dump(), "metrics": {"latency_ms": latency_ms, "token_usage": token_usage}}
@@ -223,6 +223,13 @@ def meeting_analyze(workspace_id: str, payload: MeetingInput, db: Session = Depe
 @router.post("/workspaces/{workspace_id}/meetings/save")
 def meeting_save(workspace_id: str, payload: MeetingSave, db: Session = Depends(get_db)) -> dict:
     _workspace_or_404(db, workspace_id)
+    run = None
+    if payload.run_id:
+        run = db.get(models.AgentRun, payload.run_id)
+        if not run or run.workspace_id != workspace_id or run.workflow != "meeting_intelligence":
+            raise HTTPException(status_code=404, detail="Pending meeting run not found")
+        if run.status != "pending_review":
+            raise HTTPException(status_code=409, detail="Meeting run has already been reviewed")
     for decision in payload.analysis.decisions:
         create_memory(db, workspace_id, MemoryCreate(type="decision", content=decision.decision, reason=decision.reason, source="meeting", importance=0.9))
     for action in payload.analysis.action_items:
@@ -230,12 +237,10 @@ def meeting_save(workspace_id: str, payload: MeetingSave, db: Session = Depends(
     for risk in payload.analysis.risks:
         create_risk(db, workspace_id, risk)
     create_memory(db, workspace_id, MemoryCreate(type="episodic", content=payload.analysis.summary, source="meeting", importance=0.65))
-    if payload.run_id:
-        run = db.get(models.AgentRun, payload.run_id)
-        if run:
-            run.status = "completed"
-            run.feedback = "approved"
-            db.commit()
+    if run:
+        run.status = "completed"
+        run.human_approved = True
+        db.commit()
     return {"saved": True, "decisions": len(payload.analysis.decisions), "tasks": len(payload.analysis.action_items), "risks": len(payload.analysis.risks)}
 
 
@@ -245,7 +250,7 @@ def copilot(workspace_id: str, payload: ChatRequest, db: Session = Depends(get_d
     started = time.perf_counter()
     result = operations_query(db, workspace_id, payload.query)
     latency = int((time.perf_counter() - started) * 1000)
-    run = models.AgentRun(workspace_id=workspace_id, agent="Operations Agent → Review Agent", input=payload.query, output=json.dumps(result), latency_ms=latency, token_usage=result.get("token_usage"), context_size=0, tool_calls_json=json.dumps(["get_workspace_status", "get_tasks", "search_decisions"]), groundedness="SUPPORTED", status="completed")
+    run = models.AgentRun(workspace_id=workspace_id, agent="Operations Agent → Review Agent", workflow="operations_copilot", input_type="question", input=payload.query, output=json.dumps(result), latency_ms=latency, token_usage=result.get("token_usage"), context_size=0, tool_calls_json=json.dumps(["get_workspace_status", "get_tasks", "search_decisions"]), groundedness="SUPPORTED", status="completed")
     db.add(run); db.commit()
     return {"run_id": run.id, "result": result, "latency_ms": latency}
 
@@ -259,6 +264,8 @@ def run_risk_detection(workspace_id: str, db: Session = Depends(get_db)) -> dict
     run = models.AgentRun(
         workspace_id=workspace_id,
         agent="Risk Detection workflow",
+        workflow="risk_detection",
+        input_type="workspace_state",
         input="Tasks + Decisions → Detect operational risks",
         output=json.dumps([item.model_dump() for item in candidates]),
         latency_ms=latency,
@@ -275,17 +282,20 @@ def run_risk_detection(workspace_id: str, db: Session = Depends(get_db)) -> dict
 @router.post("/workspaces/{workspace_id}/automations/risk-detection/approve")
 def approve_risk_detection(workspace_id: str, payload: RiskReview, db: Session = Depends(get_db)) -> dict:
     _workspace_or_404(db, workspace_id)
+    run = db.get(models.AgentRun, payload.run_id)
+    if not run or run.workspace_id != workspace_id or run.workflow != "risk_detection":
+        raise HTTPException(status_code=404, detail="Pending risk-detection run not found")
+    if run.status != "pending_review":
+        raise HTTPException(status_code=409, detail="Risk-detection run has already been reviewed")
     created = 0
     for item in payload.risks:
         existing = db.scalar(select(models.Risk).where(models.Risk.workspace_id == workspace_id, models.Risk.evidence == item.evidence, models.Risk.status != "resolved"))
         if not existing:
             create_risk(db, workspace_id, item)
             created += 1
-    run = db.get(models.AgentRun, payload.run_id)
-    if run and run.workspace_id == workspace_id:
-        run.status = "completed"
-        run.feedback = "approved"
-        db.commit()
+    run.status = "completed"
+    run.human_approved = True
+    db.commit()
     return {"approved": len(payload.risks), "created": created, "duplicates_skipped": len(payload.risks) - created}
 
 
@@ -295,7 +305,7 @@ def run_weekly_report(workspace_id: str, db: Session = Depends(get_db)) -> dict:
     started = time.perf_counter()
     report, usage = weekly_report(db, workspace_id)
     latency = int((time.perf_counter() - started) * 1000)
-    run = models.AgentRun(workspace_id=workspace_id, agent="Weekly Report workflow", input="Workspace state → Weekly operations report", output=report.model_dump_json(), latency_ms=latency, token_usage=usage, context_size=0, tool_calls_json=json.dumps(["get_workspace_status", "get_tasks", "search_decisions"]), groundedness="SUPPORTED", status="completed")
+    run = models.AgentRun(workspace_id=workspace_id, agent="Weekly Report workflow", workflow="weekly_report", input_type="workspace_state", input="Workspace state → Weekly operations report", output=report.model_dump_json(), latency_ms=latency, token_usage=usage, context_size=0, tool_calls_json=json.dumps(["get_workspace_status", "get_tasks", "search_decisions"]), groundedness="SUPPORTED", status="completed")
     db.add(run)
     db.commit()
     return {"run_id": run.id, "report": report.model_dump(), "latency_ms": latency}
@@ -328,12 +338,49 @@ def evaluation(workspace_id: str, db: Session = Depends(get_db)) -> dict:
 def analytics(workspace_id: str, db: Session = Depends(get_db)) -> dict:
     dashboard_data = dashboard(workspace_id, db)
     all_runs = db.scalars(select(models.AgentRun).where(models.AgentRun.workspace_id == workspace_id)).all()
-    approved = sum(run.feedback == "approved" for run in all_runs)
+    approved = sum(run.human_approved is True for run in all_runs)
+    reviewed = sum(run.human_approved is not None for run in all_runs)
     successful = sum(run.status == "completed" for run in all_runs)
     return {
         "impact": dashboard_data["impact"],
-        "operations": {"workflow_runs": len(all_runs), "successful_runs": successful, "average_latency_ms": round(sum(run.latency_ms for run in all_runs) / len(all_runs)) if all_runs else None, "human_approval_rate": round(approved / len(all_runs) * 100, 1) if all_runs else None},
+        "operations": {"workflow_runs": len(all_runs), "successful_runs": successful, "pending_reviews": sum(run.status == "pending_review" for run in all_runs), "average_latency_ms": round(sum(run.latency_ms for run in all_runs) / len(all_runs)) if all_runs else None, "human_approval_rate": round(approved / reviewed * 100, 1) if reviewed else None},
         "assumptions": {"meeting_minutes_saved": 10, "label": "Estimated from configurable assumptions, not measured ROI."},
+    }
+
+
+@router.get("/workspaces/{workspace_id}/activity")
+def activity(
+    workspace_id: str,
+    workflow: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+) -> dict:
+    _workspace_or_404(db, workspace_id)
+    scope = models.AgentRun.workspace_id == workspace_id
+
+    def run_count(*conditions: Any) -> int:
+        return db.scalar(select(func.count(models.AgentRun.id)).where(scope, *conditions)) or 0
+
+    total = run_count()
+    reviewed = run_count(models.AgentRun.human_approved.is_not(None))
+    approved = run_count(models.AgentRun.human_approved.is_(True))
+    filters = [scope]
+    if workflow:
+        filters.append(models.AgentRun.workflow == workflow)
+    if status:
+        filters.append(models.AgentRun.status == status)
+    runs = db.scalars(select(models.AgentRun).where(*filters).order_by(desc(models.AgentRun.created_at)).limit(limit)).all()
+    workflows = db.scalars(select(models.AgentRun.workflow).where(scope).distinct().order_by(models.AgentRun.workflow)).all()
+    return {
+        "summary": {
+            "total_runs": total,
+            "completed_runs": run_count(models.AgentRun.status == "completed"),
+            "pending_reviews": run_count(models.AgentRun.status == "pending_review"),
+            "approval_rate": round(approved / reviewed * 100, 1) if reviewed else None,
+        },
+        "workflows": list(workflows),
+        "runs": [_row(run) for run in runs],
     }
 
 
@@ -352,7 +399,9 @@ def review_run(run_id: str, payload: ReviewInput, db: Session = Depends(get_db))
     run = db.get(models.AgentRun, run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Agent run not found")
-    run.feedback = payload.value
+    if run.status != "pending_review":
+        raise HTTPException(status_code=409, detail="Agent run has already been reviewed")
+    run.human_approved = payload.value == "approved"
     run.status = "completed" if payload.value == "approved" else "rejected"
     db.commit()
     return {"saved": True, "review": payload.value}

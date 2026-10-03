@@ -44,6 +44,7 @@ Deploy the frontend to Vercel and the API to Railway or Render using the instruc
 - **Plan Generation** — goal decomposition into milestones, tasks, dependencies, priorities, owners, and expected outputs.
 - **Human in the loop** — edit, approve, or reject AI-generated meeting outputs before they become organizational memory.
 - **Executable Automation Gallery** — productized Meeting → Tasks, Decision Memory, Document Indexing, Weekly Report, and Risk Detection workflows; write runs remain pending until human approval.
+- **AI Activity & Approval Audit** — filterable workflow history with explicit input type, execution status, human approval, helpfulness feedback, tools, latency, token usage, and recorded output.
 - **Evaluation & observability** — retrieval traces, latency, provider token usage, context size, tool calls, groundedness, and feedback.
 - **Demo Mode** — complete synthetic workspace and deterministic Agent workflow with no API key.
 
@@ -129,6 +130,7 @@ Memory retrieval combines relevance with stored importance. Decision memory is i
 - OpenAI Responses API with `responses.parse(...)`; Azure OpenAI provider adapter
 - PyPDF document extraction; deterministic local hybrid retrieval
 - Docker and Docker Compose
+- GitHub Actions CI for tests, migrations, frontend builds, and Compose validation
 
 ## Quick Start
 
@@ -256,7 +258,7 @@ For Azure Container Apps, build the same two Dockerfiles, expose ports 8000/3000
 - Background document ingestion and OCR
 - Configurable memory consolidation, decay, conflict resolution, and approval policies
 - Streaming Agent runs and a visual workflow editor
-- Authentication, workspace membership, audit logs, and retention policies
+- Authentication, workspace membership, tamper-evident event export, and retention policies
 
 ## Contributing
 
@@ -273,14 +275,14 @@ MIT. See [LICENSE](LICENSE).
 - 独立设计并开发 OpsPilot AI，一款面向团队知识管理与运营自动化的 AI-native Workspace，将会议记录、项目文档与任务上下文转化为结构化 Decision、Action Items、Risk 与可跟踪 Workflow。
 - 构建 Meeting Intelligence 与 Organizational Memory 模块，实现会议摘要、行动项提取、Owner / Deadline 识别、历史决策沉淀及项目知识检索，降低团队人工信息整理与 Follow-up 成本。
 - 设计 Workspace-aware Context Engine，动态融合 Documents、Decision Memory、Tasks、Risks 与历史 Meeting Context，为 Operations Copilot 提供任务相关上下文。
-- 基于 FastAPI、Next.js、RAG、LLM Structured Output 与 Tool abstraction 构建端到端产品原型，并实现 Human-in-the-loop Review、Operations Dashboard、AI Run Tracking 与 Docker 化部署。
+- 基于 FastAPI、Next.js、RAG、LLM Structured Output 与 Tool abstraction 构建端到端产品原型，并实现 Human-in-the-loop Review、AI Activity 审计、Operations Dashboard 与 Docker 化部署。
 
 **English — OpsPilot AI · AI-native Knowledge & Operations Automation Platform**
 
 - Built OpsPilot AI, an AI-native operations workspace that transforms meetings, project documents, and team context into structured decisions, action items, risks, and trackable workflows.
 - Developed Meeting Intelligence and Organizational Memory capabilities for automated meeting summarization, task extraction, decision capture, knowledge retrieval, and follow-up management.
 - Designed a workspace-aware context engine that dynamically combines documents, decisions, tasks, risks, and meeting history for operational AI workflows.
-- Built the end-to-end product using FastAPI, Next.js, RAG, structured LLM outputs, tool abstractions, human-in-the-loop review, workflow analytics, and Docker deployment.
+- Built the end-to-end product using FastAPI, Next.js, RAG, structured LLM outputs, tool abstractions, human-in-the-loop review, workflow audit trails, analytics, and Docker deployment.
 
 ---
 

@@ -59,6 +59,8 @@ def run_workspace_agent(db: Session, workspace_id: str, query: str, conversation
     run = models.AgentRun(
         workspace_id=workspace_id,
         agent="Knowledge Agent → Operations Agent → Review Agent",
+        workflow="knowledge_qa",
+        input_type="question",
         input=query,
         output=result.model_dump_json(),
         latency_ms=latency_ms,

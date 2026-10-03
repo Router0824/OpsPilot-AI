@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
-from sqlalchemy import Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
@@ -94,6 +94,8 @@ class AgentRun(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True)
     agent: Mapped[str] = mapped_column(String(80))
+    workflow: Mapped[str] = mapped_column(String(100), default="workspace_agent", index=True)
+    input_type: Mapped[str] = mapped_column(String(40), default="text")
     input: Mapped[str] = mapped_column(Text)
     output: Mapped[str] = mapped_column(Text)
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
@@ -102,6 +104,7 @@ class AgentRun(Base):
     tool_calls_json: Mapped[str] = mapped_column(Text, default="[]")
     retrieval_json: Mapped[str] = mapped_column(Text, default="[]")
     groundedness: Mapped[str] = mapped_column(String(20), default="PARTIAL")
-    status: Mapped[str] = mapped_column(String(20), default="completed")
+    status: Mapped[str] = mapped_column(String(20), default="completed", index=True)
+    human_approved: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     feedback: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
