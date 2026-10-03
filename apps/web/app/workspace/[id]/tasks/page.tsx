@@ -10,7 +10,9 @@ import {
   ChevronRight,
   GripVertical,
   Network,
+  Pencil,
   Plus,
+  RotateCcw,
   Search,
   Sparkles,
   X,
@@ -29,6 +31,9 @@ const columns = [
 ] as const;
 
 const statusFlow: Task["status"][] = ["todo", "in_progress", "blocked", "done"];
+type TaskDraft = { title: string; owner: string; deadline: string; priority: string };
+type TaskEdit = { title: string; description: string; owner: string; deadline: string; priority: string; status: Task["status"]; milestone: string; dependencies: string; expected_output: string };
+const emptyDraft: TaskDraft = { title: "", owner: "", deadline: "", priority: "medium" };
 
 function formatDate(value: string) {
   return new Date(`${value}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -46,6 +51,8 @@ export default function TasksPage({ params }: { params: Promise<{ id: string }> 
   const [prompt, setPrompt] = useState("帮助我们在两周内完成这个项目。");
   const [query, setQuery] = useState("");
   const [priority, setPriority] = useState("");
+  const [ownerFilter, setOwnerFilter] = useState("");
+  const [focusFilter, setFocusFilter] = useState("");
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [planning, setPlanning] = useState(false);
   const [movingId, setMovingId] = useState("");
@@ -53,7 +60,10 @@ export default function TasksPage({ params }: { params: Promise<{ id: string }> 
   const [dropStatus, setDropStatus] = useState<Task["status"] | "">("");
   const [expandedId, setExpandedId] = useState("");
   const [addingStatus, setAddingStatus] = useState<Task["status"] | "">("");
-  const [draftTitle, setDraftTitle] = useState("");
+  const [draft, setDraft] = useState<TaskDraft>(emptyDraft);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editForm, setEditForm] = useState<TaskEdit | null>(null);
+  const [savingTask, setSavingTask] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -66,10 +76,14 @@ export default function TasksPage({ params }: { params: Promise<{ id: string }> 
     return () => { active = false; };
   }, [id, text]);
 
+  const owners = useMemo(() => Array.from(new Set(tasks.map((task) => task.owner).filter((owner) => owner && owner !== "Unassigned"))).sort(), [tasks]);
   const visibleTasks = useMemo(() => tasks.filter((task) => {
     const matchesQuery = !query || `${task.title} ${task.owner} ${task.description} ${task.expected_output}`.toLowerCase().includes(query.toLowerCase());
-    return matchesQuery && (!priority || task.priority === priority);
-  }), [priority, query, tasks]);
+    const matchesOwner = !ownerFilter || (ownerFilter === "unassigned" ? task.owner === "Unassigned" : task.owner === ownerFilter);
+    const matchesFocus = !focusFilter || (focusFilter === "attention" ? task.status === "blocked" || isOverdue(task) || task.owner === "Unassigned" : focusFilter === "overdue" ? isOverdue(task) : task.owner === "Unassigned");
+    return matchesQuery && matchesOwner && matchesFocus && (!priority || task.priority === priority);
+  }), [focusFilter, ownerFilter, priority, query, tasks]);
+  const hasFilters = Boolean(query || priority || ownerFilter || focusFilter);
 
   async function moveTask(task: Task, status: Task["status"]) {
     if (task.status === status || movingId === task.id) return;
@@ -108,20 +122,64 @@ export default function TasksPage({ params }: { params: Promise<{ id: string }> 
   }
 
   async function createTask(status: Task["status"]) {
-    const title = draftTitle.trim();
+    const title = draft.title.trim();
     if (!title) return;
     setError("");
     try {
       const created = await api<Task>(`/api/workspaces/${id}/tasks`, {
         method: "POST",
-        body: JSON.stringify({ title, status, priority: "medium", owner: "Unassigned", milestone: "Backlog", evidence: "Human created" }),
+        body: JSON.stringify({ title, status, priority: draft.priority, owner: draft.owner.trim() || "Unassigned", deadline: draft.deadline || null, milestone: "Backlog", evidence: "Human created" }),
       });
       setTasks((current) => [created, ...current]);
       setAddingStatus("");
-      setDraftTitle("");
+      setDraft(emptyDraft);
       notify(text(`“${created.title}” added to the board.`, `「${created.title}」已加入看板。`));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : text("Unable to create the task.", "无法创建任务。"));
+    }
+  }
+
+  function openEditor(task: Task) {
+    setEditingTask(task);
+    setEditForm({
+      title: task.title,
+      description: task.description || "",
+      owner: task.owner === "Unassigned" ? "" : task.owner,
+      deadline: task.deadline || "",
+      priority: task.priority,
+      status: task.status,
+      milestone: task.milestone || "Backlog",
+      dependencies: task.dependencies.join(", "),
+      expected_output: task.expected_output || "",
+    });
+  }
+
+  async function saveTask() {
+    if (!editingTask || !editForm?.title.trim() || savingTask) return;
+    setSavingTask(true);
+    setError("");
+    try {
+      const changed = await api<Task>(`/api/tasks/${editingTask.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          ...editForm,
+          title: editForm.title.trim(),
+          owner: editForm.owner.trim() || "Unassigned",
+          deadline: editForm.deadline || null,
+          milestone: editForm.milestone.trim() || "Backlog",
+          dependencies: editForm.dependencies.split(",").map((item) => item.trim()).filter(Boolean),
+        }),
+      });
+      setTasks((current) => current.map((item) => item.id === changed.id ? changed : item));
+      setEditingTask(null);
+      setEditForm(null);
+      notify(text(`“${changed.title}” updated.`, `「${changed.title}」已更新。`));
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : text("Unable to update the task.", "无法更新任务。");
+      setError(message);
+      notify(message, "error");
+    } finally {
+      setSavingTask(false);
     }
   }
 
@@ -146,6 +204,18 @@ export default function TasksPage({ params }: { params: Promise<{ id: string }> 
             <option value="medium">{text("Medium", "中")}</option>
             <option value="low">{text("Low", "低")}</option>
           </select>
+          <select aria-label={text("Filter by owner", "按负责人筛选")} value={ownerFilter} onChange={(event) => setOwnerFilter(event.target.value)}>
+            <option value="">{text("All owners", "所有负责人")}</option>
+            <option value="unassigned">{text("Unassigned", "未分配")}</option>
+            {owners.map((owner) => <option value={owner} key={owner}>{owner}</option>)}
+          </select>
+          <select aria-label={text("Focus tasks", "聚焦任务")} value={focusFilter} onChange={(event) => setFocusFilter(event.target.value)}>
+            <option value="">{text("All tasks", "所有任务")}</option>
+            <option value="attention">{text("Needs attention", "需要关注")}</option>
+            <option value="overdue">{text("Overdue", "已逾期")}</option>
+            <option value="unassigned">{text("Needs owner", "缺少负责人")}</option>
+          </select>
+          {hasFilters && <button className="button small board-clear" onClick={() => { setQuery(""); setPriority(""); setOwnerFilter(""); setFocusFilter(""); }}><RotateCcw size={11}/>{text("Clear", "清除")}</button>}
           <span className="board-hint"><GripVertical size={12} />{text("Drag cards or use the arrow controls", "拖拽便条或使用左右按钮")}</span>
         </div>
 
@@ -207,6 +277,7 @@ export default function TasksPage({ params }: { params: Promise<{ id: string }> 
                     <div className="task-card-actions">
                       <button className="icon-button" aria-label={text(`Move ${task.title} backward`, `将「${task.title}」往前移动`)} title={text("Move backward", "往前移动")} disabled={index === 0 || movingId === task.id} onClick={() => moveTask(task, statusFlow[index - 1])}><ChevronLeft size={14} /></button>
                       <button className="task-expand" aria-expanded={expanded} onClick={() => setExpandedId(expanded ? "" : task.id)}>{text("Details", "详情")} <ChevronDown size={13} /></button>
+                      <button className="icon-button" aria-label={text(`Edit ${task.title}`, `编辑「${task.title}」`)} title={text("Edit task", "编辑任务")} onClick={() => openEditor(task)}><Pencil size={12} /></button>
                       <button className="icon-button" aria-label={text(`Move ${task.title} forward`, `将「${task.title}」往后移动`)} title={text("Move forward", "往后移动")} disabled={index === statusFlow.length - 1 || movingId === task.id} onClick={() => moveTask(task, statusFlow[index + 1])}>{index === statusFlow.length - 2 ? <Check size={14} /> : <ChevronRight size={14} />}</button>
                     </div>
                   </article>;
@@ -215,10 +286,30 @@ export default function TasksPage({ params }: { params: Promise<{ id: string }> 
                 {!columnTasks.length && <div className="column-empty"><span className="column-empty-icon"><Plus size={15} /></span><strong>{text("No tasks here", "此栏没有任务")}</strong><p>{text("Drop a card or add new work.", "拖入便条或添加工作。")}</p></div>}
               </div>
 
-              {addingStatus === status ? <div className="quick-add"><input autoFocus aria-label={text(`New ${label} task title`, `添加${displayLabel}任务标题`)} placeholder={text("Task title…", "任务标题…")} value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") createTask(status); if (event.key === "Escape") setAddingStatus(""); }} /><div><button className="button small accent" onClick={() => createTask(status)} disabled={!draftTitle.trim()}>{text("Add task", "添加任务")}</button><button className="button small ghost" onClick={() => { setAddingStatus(""); setDraftTitle(""); }}>{text("Cancel", "取消")}</button></div></div> : <button className="column-add" onClick={() => { setAddingStatus(status); setDraftTitle(""); }}><Plus size={13} />{text("Add task", "添加任务")}</button>}
+              {addingStatus === status ? <div className="quick-add">
+                <input autoFocus aria-label={text(`New ${label} task title`, `添加${displayLabel}任务标题`)} placeholder={text("Task title…", "任务标题…")} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} onKeyDown={(event) => { if (event.key === "Enter") createTask(status); if (event.key === "Escape") setAddingStatus(""); }} />
+                <div className="quick-add-fields"><input aria-label={text("Owner", "负责人")} placeholder={text("Owner", "负责人")} value={draft.owner} onChange={(event) => setDraft({ ...draft, owner: event.target.value })}/><input aria-label={text("Deadline", "截止日期")} type="date" value={draft.deadline} onChange={(event) => setDraft({ ...draft, deadline: event.target.value })}/><select aria-label={text("Priority", "优先级")} value={draft.priority} onChange={(event) => setDraft({ ...draft, priority: event.target.value })}><option value="critical">{text("Critical", "紧急")}</option><option value="high">{text("High", "高")}</option><option value="medium">{text("Medium", "中")}</option><option value="low">{text("Low", "低")}</option></select></div>
+                <div className="quick-add-actions"><button className="button small accent" onClick={() => createTask(status)} disabled={!draft.title.trim()}>{text("Add task", "添加任务")}</button><button className="button small ghost" onClick={() => { setAddingStatus(""); setDraft(emptyDraft); }}>{text("Cancel", "取消")}</button></div>
+              </div> : <button className="column-add" onClick={() => { setAddingStatus(status); setDraft(emptyDraft); }}><Plus size={13} />{text("Add task", "添加任务")}</button>}
             </section>;
           })}
         </div>
+
+        {editingTask && editForm && <div className="task-drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !savingTask) { setEditingTask(null); setEditForm(null); } }}>
+          <aside className="task-drawer" role="dialog" aria-modal="true" aria-labelledby="task-editor-title">
+            <div className="task-drawer-head"><div><span className="eyebrow">{text("Work details", "工作详情")}</span><h2 id="task-editor-title" className="display">{text("Edit task", "编辑任务")}</h2></div><button className="icon-button" aria-label={text("Close editor", "关闭编辑器")} onClick={() => { setEditingTask(null); setEditForm(null); }} disabled={savingTask}><X size={15}/></button></div>
+            <div className="task-editor-form">
+              <div className="field"><label>{text("Task title", "任务标题")}</label><input autoFocus value={editForm.title} onChange={(event) => setEditForm({ ...editForm, title: event.target.value })}/></div>
+              <div className="field"><label>{text("Description", "说明")}</label><textarea value={editForm.description} onChange={(event) => setEditForm({ ...editForm, description: event.target.value })} placeholder={text("Add context, scope, or acceptance notes…", "补充背景、范围或验收说明…")}/></div>
+              <div className="task-editor-grid"><div className="field"><label>{text("Owner", "负责人")}</label><input value={editForm.owner} onChange={(event) => setEditForm({ ...editForm, owner: event.target.value })} placeholder={text("Unassigned", "未分配")}/></div><div className="field"><label>{text("Deadline", "截止日期")}</label><input type="date" value={editForm.deadline} onChange={(event) => setEditForm({ ...editForm, deadline: event.target.value })}/></div></div>
+              <div className="task-editor-grid"><div className="field"><label>{text("Priority", "优先级")}</label><select value={editForm.priority} onChange={(event) => setEditForm({ ...editForm, priority: event.target.value })}><option value="critical">{text("Critical", "紧急")}</option><option value="high">{text("High", "高")}</option><option value="medium">{text("Medium", "中")}</option><option value="low">{text("Low", "低")}</option></select></div><div className="field"><label>{text("Status", "状态")}</label><select value={editForm.status} onChange={(event) => setEditForm({ ...editForm, status: event.target.value as Task["status"] })}>{columns.map(([value, name]) => <option value={value} key={value}>{text(name, { todo: "待办", in_progress: "进行中", blocked: "受阻", done: "完成" }[value])}</option>)}</select></div></div>
+              <div className="field"><label>{text("Milestone", "里程碑")}</label><input value={editForm.milestone} onChange={(event) => setEditForm({ ...editForm, milestone: event.target.value })}/></div>
+              <div className="field"><label>{text("Expected output", "预期产出")}</label><textarea value={editForm.expected_output} onChange={(event) => setEditForm({ ...editForm, expected_output: event.target.value })} placeholder={text("What proves this task is complete?", "什么结果能证明任务已经完成？")}/></div>
+              <div className="field"><label>{text("Dependencies", "依赖任务")}</label><input value={editForm.dependencies} onChange={(event) => setEditForm({ ...editForm, dependencies: event.target.value })} placeholder={text("Comma-separated task titles", "使用逗号分隔任务标题")}/></div>
+            </div>
+            <div className="task-drawer-actions"><button className="button" onClick={() => { setEditingTask(null); setEditForm(null); }} disabled={savingTask}>{text("Cancel", "取消")}</button><button className="button accent" onClick={saveTask} disabled={savingTask || !editForm.title.trim()}>{savingTask ? text("Saving…", "保存中…") : text("Save changes", "保存修改")}</button></div>
+          </aside>
+        </div>}
 
       </div>
     </WorkspaceShell>

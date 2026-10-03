@@ -1,6 +1,6 @@
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class WorkspaceCreate(BaseModel):
@@ -31,7 +31,21 @@ class TaskCreate(BaseModel):
 
 
 class TaskUpdate(BaseModel):
-    status: Literal["todo", "in_progress", "blocked", "done"]
+    title: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    description: Optional[str] = None
+    owner: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    deadline: Optional[str] = None
+    priority: Optional[Literal["low", "medium", "high", "critical"]] = None
+    status: Optional[Literal["todo", "in_progress", "blocked", "done"]] = None
+    milestone: Optional[str] = Field(default=None, min_length=1, max_length=160)
+    dependencies: Optional[List[str]] = None
+    expected_output: Optional[str] = None
+
+    @model_validator(mode="after")
+    def require_change(self) -> "TaskUpdate":
+        if not self.model_fields_set:
+            raise ValueError("At least one task field must be provided")
+        return self
 
 
 class RiskItem(BaseModel):

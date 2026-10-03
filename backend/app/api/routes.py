@@ -168,10 +168,16 @@ def update_task(task_id: str, payload: TaskUpdate, db: Session = Depends(get_db)
     task = db.get(models.Task, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    task.status = payload.status
+    changes = payload.model_dump(exclude_unset=True)
+    dependencies = changes.pop("dependencies", None)
+    if dependencies is not None:
+        task.dependencies_json = json.dumps(dependencies)
+    for field, value in changes.items():
+        if value is not None or field == "deadline":
+            setattr(task, field, value)
     db.commit()
     db.refresh(task)
-    if payload.status == "blocked" and (task.owner == "Unassigned" or (task.deadline and task.deadline < date.today().isoformat())):
+    if task.status == "blocked" and (task.owner == "Unassigned" or (task.deadline and task.deadline < date.today().isoformat())):
         existing = db.scalar(select(models.Risk).where(models.Risk.workspace_id == task.workspace_id, models.Risk.evidence.contains(task.title), models.Risk.status != "resolved"))
         if not existing:
             create_risk(db, task.workspace_id, RiskItem(risk=f"{task.title} is blocked without clear resolution ownership.", severity="high", evidence=f"Task '{task.title}' is blocked; owner: {task.owner}; deadline: {task.deadline or 'missing'}.", suggested_action="Assign an accountable owner and resolution date.", source="Task overdue workflow"))

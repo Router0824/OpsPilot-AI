@@ -43,7 +43,7 @@ Deploy the frontend to Vercel and the API to Railway or Render using the instruc
 - **Project Memory** — semantic, decision, and episodic memory with importance-aware retrieval.
 - **Risk Tracker** — evidence-backed risks from blocked work, missing ownership, deadlines, meetings, and documents.
 - **Plan Generation** — goal decomposition into milestones, tasks, dependencies, priorities, owners, and expected outputs.
-- **Interactive Task Board** — four-stage drag-and-drop execution board with optimistic updates, explicit keyboard-friendly movement controls, ownership and overdue signals, inline creation, filtering, and expandable task context.
+- **Interactive Task Board** — four-stage drag-and-drop execution board with optimistic updates, keyboard-friendly movement controls, full task editing, enhanced quick creation, owner / priority / attention filters, ownership and overdue signals, and clear save feedback.
 - **Human in the loop** — edit, approve, or reject AI-generated meeting outputs before they become organizational memory.
 - **Executable Automation Gallery** — productized Meeting → Tasks, Decision Memory, Document Indexing, Weekly Report, and Risk Detection workflows; write runs remain pending until human approval.
 - **AI Activity & Approval Audit** — filterable workflow history with explicit input type, execution status, human approval, helpfulness feedback, tools, latency, token usage, and recorded output.
