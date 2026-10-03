@@ -13,6 +13,10 @@ OpsPilot AI is a portfolio-ready, full-stack product for practical AI operations
 
 The repository runs end to end in deterministic Demo Mode without an API key. Live mode supports OpenAI, Azure OpenAI, and DeepSeek through a shared structured-output boundary.
 
+![OpsPilot AI workspace overview](docs/images/workspace-overview.png)
+
+<p align="center"><sub>Workspace health, active work, decisions, risks, and automation outcomes in one operational view.</sub></p>
+
 ## Why OpsPilot
 
 Teams rarely lack information; they lack continuity. Important context is scattered across meeting notes, documents, task boards, and chat. Decisions lose their rationale, action items lose their owners, and recurring status work stays manual.
@@ -22,6 +26,37 @@ OpsPilot connects that operating loop:
 ```text
 Information → Knowledge → Decision → Action → Workflow → Memory
 ```
+
+## Product preview
+
+The screenshots below come from the bundled synthetic workspace. The complete interface can switch between English and Simplified Chinese; the preview uses the Simplified Chinese locale.
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/images/task-board.png" alt="OpsPilot task board" />
+      <br /><strong>Task Board</strong> — drag work across four stages, edit complete task context, and focus on blocked, overdue, or unassigned items.
+    </td>
+    <td width="50%">
+      <img src="docs/images/meeting-intelligence.png" alt="OpsPilot meeting intelligence" />
+      <br /><strong>Meeting Intelligence</strong> — analyze raw notes and review structured decisions, actions, risks, and questions before saving.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/images/knowledge-center.png" alt="OpsPilot knowledge center" />
+      <br /><strong>Knowledge Center</strong> — upload, parse, chunk, and index project sources for inspectable hybrid retrieval.
+    </td>
+    <td width="50%">
+      <img src="docs/images/workflow-automation.png" alt="OpsPilot workflow automation" />
+      <br /><strong>Workflow Automation</strong> — run repeatable meeting, document, reporting, and risk workflows with approval gates.
+    </td>
+  </tr>
+</table>
+
+![OpsPilot operations analytics](docs/images/operations-analytics.png)
+
+<p align="center"><sub>Observed workflow throughput, approval state, latency, and clearly labelled time-saving estimates.</sub></p>
 
 ## Product capabilities
 
@@ -35,6 +70,24 @@ Information → Knowledge → Decision → Action → Workflow → Memory
 - **Human review** — keeps proposed writes pending until a person approves or rejects them.
 - **Activity audit and analytics** — records workflow status, approval, feedback, latency, context size, tool calls, and token usage when available.
 - **Bilingual interface** — provides persistent English and Simplified Chinese UI across the complete product.
+
+## How work moves through the system
+
+1. **Capture** — a user uploads a source document, pastes meeting notes, creates a task, or asks an operational question.
+2. **Structure** — document and meeting services normalize input into typed Pydantic models rather than unvalidated free-form text.
+3. **Retrieve** — the Context Engine selects relevant documents, decisions, memory, tasks, risks, and meetings within a bounded context budget.
+4. **Reason** — the selected provider returns workflow-specific structured output; Demo Mode returns deterministic fixtures through the same service boundary.
+5. **Review** — write-oriented proposals remain pending so a person can edit, approve, or reject them.
+6. **Commit and observe** — approved records enter workspace state while the run, tools, latency, retrieval trace, feedback, and approval state remain auditable.
+
+| Surface | Typical input | Produced state | Human control |
+|---|---|---|---|
+| Meeting Intelligence | Raw meeting notes | Summary, decisions, tasks, risks, questions | Edit and approve selected records |
+| Knowledge Center | PDF, TXT, Markdown | Parsed documents and retrievable chunks | Choose uploaded sources |
+| Operations Copilot | Status or planning question | Grounded operational answer | Helpful / not-helpful feedback |
+| Plan Generation | Workspace goal | Milestones, dependencies, owners, expected outputs | Review generated tasks on the board |
+| Risk Detection | Live workspace state | Explainable risk proposals | Approve or reject before write |
+| Weekly Report | Tasks, decisions, risks, recent runs | Current status and next priorities | Read-only generated report |
 
 ## Demo walkthrough
 
@@ -77,6 +130,40 @@ The default database is SQLite for zero-configuration local use. The same SQLAlc
 
 More detail: [Architecture](docs/architecture.md) · [Product brief](docs/product.md) · [Evaluation](docs/evaluation.md)
 
+## Implementation details
+
+### Hybrid retrieval
+
+Uploaded documents are parsed into source-aware chunks. Retrieval combines deterministic feature-hashed cosine similarity, keyword coverage, phrase signals, and importance metadata. The merged top-k result keeps document and chunk identifiers so evaluation can inspect why context was selected. The local implementation is intentionally lightweight and replaceable with provider embeddings or pgvector.
+
+### Context engineering and memory
+
+`build_workspace_context()` allocates a fixed token budget across the workspace goal, documents, formal decisions, memory, active tasks, risks, meetings, and recent conversation. The allocation changes with the request: blocker questions prioritize tasks and risks, while decision questions prioritize decisions and source documents. Project, decision, meeting, and activity memory are stored separately so durable facts are not mixed with transient conversation.
+
+### Structured outputs and provider boundary
+
+Meeting analysis, planning, and operational answers are validated against typed schemas before they reach application state. OpenAI, Azure OpenAI, and DeepSeek adapters share the same application-facing interface. Provider credentials and model selection stay in the backend environment.
+
+### Human review and observability
+
+Approval and usefulness are separate concepts. Approval controls whether a proposed write changes workspace state; helpful / not-helpful feedback evaluates an existing result. Each run can record its workflow, input type, status, tools, latency, context size, token usage, groundedness, output, and review outcome.
+
+## API surface
+
+FastAPI exposes interactive documentation at `/docs`. The main endpoint groups are:
+
+| Endpoint family | Responsibility |
+|---|---|
+| `/api/workspaces` | Workspace creation, dashboard state, and complete workspace retrieval |
+| `/api/workspaces/{id}/documents` | Document ingestion, parsing, chunking, and indexing |
+| `/api/workspaces/{id}/meetings/*` | Meeting analysis and reviewed record persistence |
+| `/api/workspaces/{id}/tasks` and `/api/tasks/{id}` | Task creation, partial editing, and status movement |
+| `/api/workspaces/{id}/copilot` | Workspace-aware operational questions |
+| `/api/workspaces/{id}/automations/*` | Weekly reporting and approval-based risk detection |
+| `/api/workspaces/{id}/activity` | Workflow run history, filters, review, and feedback |
+| `/api/workspaces/{id}/analytics` | Operational throughput and run-health metrics |
+| `/api/workspaces/{id}/evaluation` | Retrieval traces and evaluation evidence |
+
 ## Technology
 
 - Next.js 16, React 19, TypeScript
@@ -112,6 +199,12 @@ make dev-web
 Open [http://localhost:3000](http://localhost:3000). API documentation is available at [http://localhost:8000/docs](http://localhost:8000/docs).
 
 ## Model configuration
+
+| Mode | External API required | Persistence | Best for |
+|---|---:|---|---|
+| Demo Mode | No | SQLite by default | Reviewers, screenshots, local exploration |
+| Live model + SQLite | Yes | Local file | Product development and provider testing |
+| Live model + PostgreSQL | Yes | PostgreSQL volume or managed database | Hosted and multi-session deployments |
 
 Demo Mode is enabled by default and makes no external model requests:
 
