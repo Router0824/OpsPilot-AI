@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="zh-Hant">
+    <html lang="zh-CN">
       <body className={`${inter.variable} ${manrope.variable}`}><AppProvider>{children}</AppProvider></body>
     </html>
   );

@@ -25,7 +25,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    document.documentElement.lang = locale === "zh" ? "zh-Hant" : "en";
+    document.documentElement.lang = locale === "zh" ? "zh-CN" : "en";
     window.localStorage.setItem("opspilot-locale", locale);
   }, [locale]);
 
@@ -55,7 +55,7 @@ export function useApp() {
 
 export function LocaleToggle({ compact = false }: { compact?: boolean }) {
   const { locale, setLocale } = useApp();
-  return <div className={`locale-toggle ${compact ? "compact" : ""}`} aria-label={locale === "zh" ? "切換語言" : "Change language"}>
+  return <div className={`locale-toggle ${compact ? "compact" : ""}`} aria-label={locale === "zh" ? "切换语言" : "Change language"}>
     <Languages size={13} />
     <button className={locale === "zh" ? "active" : ""} onClick={() => setLocale("zh")} aria-pressed={locale === "zh"}>中</button>
     <span>/</span>

@@ -20,16 +20,16 @@ export default function WorkspacesPage() {
     try {
       const item = await api<Workspace>("/api/workspaces", { method: "POST", body: JSON.stringify(form) });
       setItems([item, ...items]); setOpen(false); setForm({ name: "", goal: "" });
-      notify(text("Workspace created.", "工作區已建立。"));
+      notify(text("Workspace created.", "工作区已创建。"));
     } catch (error) {
-      notify(error instanceof Error ? error.message : text("Unable to create workspace.", "無法建立工作區。"), "error");
+      notify(error instanceof Error ? error.message : text("Unable to create workspace.", "无法创建工作区。"), "error");
     } finally { setSaving(false); }
   }
   useEffect(() => { api<Workspace[]>("/api/workspaces").then(setItems).catch(() => undefined).finally(() => setLoading(false)); }, []);
   return <div className="workspaces-page">
     <div className="workspace-page-top"><Link href="/"><Logo /></Link><LocaleToggle /></div>
-    <div className="page-title" style={{ marginTop: 65 }}><div><h1 className="display">{text("Your workspaces", "你的工作區")}</h1><p>{text("Each workspace keeps knowledge, decisions, tasks, and agent activity together.", "每個工作區都會集中保存知識、決策、任務與 AI 活動。")}</p></div><button className="button primary" onClick={() => setOpen(!open)}><Plus size={14}/>{text("New workspace", "新增工作區")}</button></div>
-    {open && <div className="card form-reveal" style={{ padding: 20, marginBottom: 18 }}><div className="form-grid"><div className="field"><label>{text("Workspace name", "工作區名稱")}</label><input value={form.name} onChange={event => setForm({...form, name: event.target.value})} placeholder={text("Product Research", "產品研究")}/></div><div className="field"><label>{text("Project goal", "專案目標")}</label><textarea style={{ minHeight: 90 }} value={form.goal} onChange={event => setForm({...form, goal: event.target.value})} placeholder={text("What should this workspace accomplish?", "這個工作區希望完成什麼？")}/></div><button className="button accent" disabled={saving || form.name.length < 2 || form.goal.length < 5} onClick={create}>{saving ? text("Creating…", "建立中…") : text("Create workspace", "建立工作區")}</button></div></div>}
-    {loading ? <div className="loading">{text("Loading workspaces…", "載入工作區…")}</div> : items.map(item => <Link className="workspace-card" href={`/workspace/${item.id}`} key={item.id}><div><h2>{item.name}</h2><p>{item.goal}</p></div><ArrowRight size={16}/></Link>)}
+    <div className="page-title" style={{ marginTop: 65 }}><div><h1 className="display">{text("Your workspaces", "你的工作区")}</h1><p>{text("Each workspace keeps knowledge, decisions, tasks, and agent activity together.", "每个工作区都会集中保存知识、决策、任务与 AI 活动。")}</p></div><button className="button primary" onClick={() => setOpen(!open)}><Plus size={14}/>{text("New workspace", "添加工作区")}</button></div>
+    {open && <div className="card form-reveal" style={{ padding: 20, marginBottom: 18 }}><div className="form-grid"><div className="field"><label>{text("Workspace name", "工作区名称")}</label><input value={form.name} onChange={event => setForm({...form, name: event.target.value})} placeholder={text("Product Research", "产品研究")}/></div><div className="field"><label>{text("Project goal", "项目目标")}</label><textarea style={{ minHeight: 90 }} value={form.goal} onChange={event => setForm({...form, goal: event.target.value})} placeholder={text("What should this workspace accomplish?", "这个工作区希望完成什么？")}/></div><button className="button accent" disabled={saving || form.name.length < 2 || form.goal.length < 5} onClick={create}>{saving ? text("Creating…", "创建中…") : text("Create workspace", "创建工作区")}</button></div></div>}
+    {loading ? <div className="loading">{text("Loading workspaces…", "加载工作区…")}</div> : items.map(item => <Link className="workspace-card" href={`/workspace/${item.id}`} key={item.id}><div><h2>{item.name}</h2><p>{item.goal}</p></div><ArrowRight size={16}/></Link>)}
   </div>;
 }
