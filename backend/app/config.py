@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    deepseek_api_key: str = ""
+    deepseek_base_url: str = "https://api.deepseek.com"
+    deepseek_model: str = "deepseek-flash"
     azure_openai_api_key: str = ""
     azure_openai_endpoint: str = ""
     azure_openai_deployment: str = ""
@@ -30,6 +33,8 @@ class Settings(BaseSettings):
     def provider(self) -> str:
         if self.azure_openai_api_key and self.azure_openai_endpoint:
             return "azure"
+        if self.deepseek_api_key:
+            return "deepseek"
         if self.openai_api_key:
             return "openai"
         return "demo"

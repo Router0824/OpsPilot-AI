@@ -129,7 +129,7 @@ Memory retrieval combines relevance with stored importance. Decision memory is i
 - Next.js 16, React 19, TypeScript, custom responsive design system
 - FastAPI, Pydantic structured outputs, SQLAlchemy
 - SQLite by default; PostgreSQL 17 + Psycopg production path with Alembic migrations
-- OpenAI Responses API with `responses.parse(...)`; Azure OpenAI provider adapter
+- OpenAI Responses API with `responses.parse(...)`; Azure OpenAI and DeepSeek JSON Output provider adapters
 - PyPDF document extraction; deterministic local hybrid retrieval
 - Docker and Docker Compose
 - GitHub Actions CI for tests, migrations, frontend builds, and Compose validation
@@ -198,6 +198,17 @@ To use a real model, provide one provider and disable Demo Mode:
 DEMO_MODE=false
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini
+```
+
+Or configure DeepSeek's OpenAI-compatible API. DeepSeek responses are generated
+in JSON Output mode and validated against the same Pydantic schemas used by the
+other providers:
+
+```dotenv
+DEMO_MODE=false
+DEEPSEEK_API_KEY=...
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-flash
 ```
 
 Or configure Azure OpenAI:
