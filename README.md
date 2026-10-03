@@ -35,6 +35,7 @@ Deploy the frontend to Vercel and the API to Railway or Render using the instruc
 
 ## Features
 
+- **Bilingual product UI** — persistent English / Traditional Chinese language switching across the public site and complete workspace, with shared loading, success, error, focus, and interaction feedback.
 - **Meeting Intelligence** — structured summary, decisions, confidence, action items, owners, deadlines, risks, and questions with review before write.
 - **Operations Copilot** — weekly status, overdue work, workspace changes, blockers, and next priorities from live operational state.
 - **Hybrid RAG** — local vector similarity + keyword coverage + rank fusion, with inspectable top-k scores.
