@@ -43,7 +43,7 @@ Deploy the frontend to Vercel and the API to Railway or Render using the instruc
 - **Risk Tracker** — evidence-backed risks from blocked work, missing ownership, deadlines, meetings, and documents.
 - **Plan Generation** — goal decomposition into milestones, tasks, dependencies, priorities, owners, and expected outputs.
 - **Human in the loop** — edit, approve, or reject AI-generated meeting outputs before they become organizational memory.
-- **Automation Gallery** — productized Meeting → Tasks, Decision Memory, Document Indexing, Weekly Report, and Risk Detection workflows.
+- **Executable Automation Gallery** — productized Meeting → Tasks, Decision Memory, Document Indexing, Weekly Report, and Risk Detection workflows; write runs remain pending until human approval.
 - **Evaluation & observability** — retrieval traces, latency, provider token usage, context size, tool calls, groundedness, and feedback.
 - **Demo Mode** — complete synthetic workspace and deterministic Agent workflow with no API key.
 
@@ -87,7 +87,7 @@ SQLite is the zero-configuration default. Persistence goes through SQLAlchemy, s
 ```text
 Documents → parse → chunk → index
 Request   → context budget → hybrid retrieval → memory retrieval
-          → Research → Planning / Execution → Review
+          → Knowledge Agent → Operations Agent → Review Agent
           → structured response + citations → episodic memory + metrics
 ```
 
@@ -102,6 +102,8 @@ Agents serve operational workflows rather than acting as standalone chatbots.
 - **Review Agent** checks evidence, decision conflicts, missing context, and structured-output completeness.
 
 Typed tool boundaries include `search_documents`, `search_decisions`, `search_memory`, `get_tasks`, `create_task`, `create_decision`, `create_risk`, and `get_workspace_status`.
+
+Risk Detection evaluates blocked and overdue work, missing owners or deadlines, unresolved dependencies, and potentially conflicting decisions. It returns explainable proposals for approve/reject review and de-duplicates accepted risks by workspace evidence.
 
 ## Context Engineering
 

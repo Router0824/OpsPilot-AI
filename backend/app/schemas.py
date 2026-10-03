@@ -47,6 +47,11 @@ class RiskUpdate(BaseModel):
     status: Literal["open", "monitoring", "resolved"]
 
 
+class RiskReview(BaseModel):
+    run_id: str
+    risks: List[RiskItem]
+
+
 class ChatRequest(BaseModel):
     query: str = Field(min_length=2)
     conversation: List[str] = []

@@ -21,6 +21,7 @@ from ..schemas import (
     MemoryCreate,
     PlanRequest,
     RiskItem,
+    RiskReview,
     RiskUpdate,
     ReviewInput,
     TaskCreate,
@@ -30,8 +31,9 @@ from ..schemas import (
 from ..services.documents import parse_document
 from ..services.meeting import analyze_meeting
 from ..services.planning import generate_plan
-from ..services.operations import operations_query
+from ..services.operations import operations_query, weekly_report
 from ..services.repository import add_document, create_memory, create_risk, create_task
+from ..services.risk_detection import detect_risks
 
 
 router = APIRouter(prefix="/api")
@@ -88,13 +90,14 @@ def dashboard(workspace_id: str, db: Session = Depends(get_db)) -> dict:
     memories = db.scalars(select(models.Memory).where(models.Memory.workspace_id == workspace_id).order_by(desc(models.Memory.created_at))).all()
     tasks = db.scalars(select(models.Task).where(models.Task.workspace_id == workspace_id).order_by(desc(models.Task.created_at))).all()
     risks = db.scalars(select(models.Risk).where(models.Risk.workspace_id == workspace_id).order_by(desc(models.Risk.created_at))).all()
-    runs = db.scalars(select(models.AgentRun).where(models.AgentRun.workspace_id == workspace_id).order_by(desc(models.AgentRun.created_at)).limit(8)).all()
+    all_runs = db.scalars(select(models.AgentRun).where(models.AgentRun.workspace_id == workspace_id).order_by(desc(models.AgentRun.created_at))).all()
+    runs = all_runs[:8]
     task_counts = Counter(task.status for task in tasks)
     decisions = [memory for memory in memories if memory.type == "decision"]
     return {
         "workspace": _row(workspace),
-        "counts": {"documents": len(documents), "memories": len(memories), "active_tasks": task_counts["todo"] + task_counts["in_progress"], "blocked_tasks": task_counts["blocked"], "completed_tasks": task_counts["done"], "open_risks": sum(risk.status != "resolved" for risk in risks), "decisions": len(decisions), "agent_runs": len(runs)},
-        "impact": {"meetings_processed": sum(run.agent == "Meeting Intelligence" for run in runs), "tasks_auto_generated": sum(task.evidence == "Generated from Meeting" for task in tasks), "decisions_captured": len(decisions), "documents_indexed": len(documents), "workflow_runs": len(runs), "estimated_minutes_saved": sum(run.agent == "Meeting Intelligence" for run in runs) * 10},
+        "counts": {"documents": len(documents), "memories": len(memories), "active_tasks": task_counts["todo"] + task_counts["in_progress"], "blocked_tasks": task_counts["blocked"], "completed_tasks": task_counts["done"], "open_risks": sum(risk.status != "resolved" for risk in risks), "decisions": len(decisions), "agent_runs": len(all_runs)},
+        "impact": {"meetings_processed": sum(run.agent == "Meeting Intelligence" for run in all_runs), "tasks_auto_generated": sum(task.evidence == "Generated from Meeting" for task in tasks), "decisions_captured": len(decisions), "documents_indexed": len(documents), "workflow_runs": len(all_runs), "estimated_minutes_saved": sum(run.agent == "Meeting Intelligence" and run.feedback == "approved" for run in all_runs) * 10},
         "tasks": [_row(task) for task in tasks],
         "decisions": [_row(item) for item in decisions[:5]],
         "risks": [_row(item) for item in risks[:5]],
@@ -244,6 +247,57 @@ def copilot(workspace_id: str, payload: ChatRequest, db: Session = Depends(get_d
     run = models.AgentRun(workspace_id=workspace_id, agent="Operations Agent → Review Agent", input=payload.query, output=json.dumps(result), latency_ms=latency, token_usage=result.get("token_usage"), context_size=0, tool_calls_json=json.dumps(["get_workspace_status", "get_tasks", "search_decisions"]), groundedness="SUPPORTED", status="completed")
     db.add(run); db.commit()
     return {"run_id": run.id, "result": result, "latency_ms": latency}
+
+
+@router.post("/workspaces/{workspace_id}/automations/risk-detection")
+def run_risk_detection(workspace_id: str, db: Session = Depends(get_db)) -> dict:
+    _workspace_or_404(db, workspace_id)
+    started = time.perf_counter()
+    candidates = detect_risks(db, workspace_id)
+    latency = int((time.perf_counter() - started) * 1000)
+    run = models.AgentRun(
+        workspace_id=workspace_id,
+        agent="Risk Detection workflow",
+        input="Tasks + Decisions → Detect operational risks",
+        output=json.dumps([item.model_dump() for item in candidates]),
+        latency_ms=latency,
+        context_size=0,
+        tool_calls_json=json.dumps(["get_tasks", "search_decisions"]),
+        groundedness="SUPPORTED",
+        status="pending_review",
+    )
+    db.add(run)
+    db.commit()
+    return {"run_id": run.id, "risks": [item.model_dump() for item in candidates], "latency_ms": latency}
+
+
+@router.post("/workspaces/{workspace_id}/automations/risk-detection/approve")
+def approve_risk_detection(workspace_id: str, payload: RiskReview, db: Session = Depends(get_db)) -> dict:
+    _workspace_or_404(db, workspace_id)
+    created = 0
+    for item in payload.risks:
+        existing = db.scalar(select(models.Risk).where(models.Risk.workspace_id == workspace_id, models.Risk.evidence == item.evidence, models.Risk.status != "resolved"))
+        if not existing:
+            create_risk(db, workspace_id, item)
+            created += 1
+    run = db.get(models.AgentRun, payload.run_id)
+    if run and run.workspace_id == workspace_id:
+        run.status = "completed"
+        run.feedback = "approved"
+        db.commit()
+    return {"approved": len(payload.risks), "created": created, "duplicates_skipped": len(payload.risks) - created}
+
+
+@router.post("/workspaces/{workspace_id}/automations/weekly-report")
+def run_weekly_report(workspace_id: str, db: Session = Depends(get_db)) -> dict:
+    _workspace_or_404(db, workspace_id)
+    started = time.perf_counter()
+    report, usage = weekly_report(db, workspace_id)
+    latency = int((time.perf_counter() - started) * 1000)
+    run = models.AgentRun(workspace_id=workspace_id, agent="Weekly Report workflow", input="Workspace state → Weekly operations report", output=report.model_dump_json(), latency_ms=latency, token_usage=usage, context_size=0, tool_calls_json=json.dumps(["get_workspace_status", "get_tasks", "search_decisions"]), groundedness="SUPPORTED", status="completed")
+    db.add(run)
+    db.commit()
+    return {"run_id": run.id, "report": report.model_dump(), "latency_ms": latency}
 
 
 @router.post("/workspaces/{workspace_id}/plans")
