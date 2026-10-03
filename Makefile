@@ -1,4 +1,4 @@
-.PHONY: install dev-backend dev-web test build docker
+.PHONY: install dev-backend dev-web test build migrate migration-check docker docker-postgres
 
 install:
 	uv venv --python 3.11 .venv
@@ -15,9 +15,17 @@ test:
 	cd backend && ../.venv/bin/python -m pytest -q
 	cd apps/web && npm run lint && npm run build
 
+migrate:
+	cd backend && ../.venv/bin/alembic -c alembic.ini upgrade head
+
+migration-check:
+	cd backend && ../.venv/bin/alembic -c alembic.ini check
+
 build:
 	cd apps/web && npm run build
 
 docker:
 	docker compose up --build
 
+docker-postgres:
+	docker compose -f docker-compose.yml -f docker-compose.postgres.yml up --build

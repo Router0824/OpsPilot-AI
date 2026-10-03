@@ -1,6 +1,6 @@
 # Architecture
 
-OpsPilot keeps the MVP intentionally inspectable. FastAPI owns project state and orchestration; Next.js renders the product experience. SQLite is the zero-setup default, while the SQLAlchemy repository boundary allows a PostgreSQL URL without changing domain code.
+OpsPilot keeps the MVP intentionally inspectable. FastAPI owns project state and orchestration; Next.js renders the product experience. SQLite is the zero-setup default. PostgreSQL 17 uses the same SQLAlchemy repository boundary, Psycopg driver, and versioned Alembic migrations.
 
 ## Request path
 
@@ -19,4 +19,4 @@ Automation runs are persisted as `AgentRun` records. Read-only workflows such as
 - Vector retrieval is local feature hashing, not a hosted embedding model.
 - Orchestration is explicit Python, not a graph framework.
 - Demo mode is deterministic, so reviewers can evaluate the whole product without credentials.
-- SQLite is optimized for a single-instance MVP; production multi-instance deployments should use PostgreSQL and pgvector.
+- SQLite is optimized for a single-instance MVP; the tested PostgreSQL Compose overlay is the production persistence path, with pgvector remaining a retrieval upgrade.

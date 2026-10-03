@@ -3,16 +3,15 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import models  # noqa: F401
 from .api.routes import router
 from .config import get_settings
-from .database import Base, engine
 from .demo.seed_data import seed_demo
+from .migrations import ensure_schema
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    Base.metadata.create_all(engine)
+    ensure_schema()
     seed_demo()
     yield
 
@@ -37,4 +36,3 @@ app.include_router(router)
 @app.get("/")
 def root() -> dict:
     return {"name": settings.app_name, "docs": "/docs", "health": "/api/health"}
-

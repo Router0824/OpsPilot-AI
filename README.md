@@ -76,11 +76,12 @@ backend/app/context/      Token-budgeted context builder
 backend/app/retrieval/    Vector + keyword hybrid retrieval
 backend/app/services/     Documents, LLM, meetings, planning, repositories
 backend/app/demo/         Synthetic seed workspace
+backend/migrations/       Versioned SQLite/PostgreSQL schema
 backend/tests/            Context, memory, meeting, and planning tests
 docs/                     Product, architecture, and evaluation notes
 ```
 
-SQLite is the zero-configuration default. Persistence goes through SQLAlchemy, so a PostgreSQL `DATABASE_URL` can be supplied without changing domain code. See [architecture details](docs/architecture.md).
+SQLite is the zero-configuration default. Persistence goes through SQLAlchemy and a shared Alembic history, so a PostgreSQL `DATABASE_URL` can be supplied without changing domain code. See [architecture details](docs/architecture.md).
 
 ## How It Works
 
@@ -124,7 +125,7 @@ Memory retrieval combines relevance with stored importance. Decision memory is i
 
 - Next.js 16, React 19, TypeScript, custom responsive design system
 - FastAPI, Pydantic structured outputs, SQLAlchemy
-- SQLite by default; PostgreSQL-compatible persistence boundary
+- SQLite by default; PostgreSQL 17 + Psycopg production path with Alembic migrations
 - OpenAI Responses API with `responses.parse(...)`; Azure OpenAI provider adapter
 - PyPDF document extraction; deterministic local hybrid retrieval
 - Docker and Docker Compose
@@ -159,6 +160,23 @@ Run all tests and the production frontend build:
 ```bash
 make test
 ```
+
+### Database migrations
+
+SQLite Demo Mode still starts with zero setup. API startup applies the versioned Alembic schema automatically; a complete database created by an earlier OpsPilot version is safely baselined before upgrades. Production operators can also run migrations explicitly:
+
+```bash
+make migrate
+make migration-check
+```
+
+To run the complete stack against PostgreSQL instead of SQLite:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.postgres.yml up --build
+```
+
+The PostgreSQL overlay waits for database health, applies `alembic upgrade head`, and only then starts the API. Both `postgres://` provider URLs and explicit `postgresql+psycopg://` URLs are normalized by the backend.
 
 ## Demo Mode
 
@@ -211,6 +229,14 @@ docker compose up --build
 ```
 
 The web app is available on port `3000`, the API on `8000`, and SQLite data persists in the `opspilot_data` volume.
+
+For the production-style PostgreSQL stack:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.postgres.yml up --build
+```
+
+PostgreSQL data persists in `opspilot_postgres`; the backend container runs migrations before accepting traffic. Replace the local development credentials in `docker-compose.postgres.yml` when adapting this stack for a hosted environment.
 
 ### Vercel + Railway / Render
 

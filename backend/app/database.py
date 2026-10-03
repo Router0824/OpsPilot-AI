@@ -13,12 +13,13 @@ class Base(DeclarativeBase):
 
 
 settings = get_settings()
-if settings.database_url.startswith("sqlite:///"):
-    db_path = settings.database_url.removeprefix("sqlite:///")
+database_url = settings.sqlalchemy_database_url
+if database_url.startswith("sqlite:///"):
+    db_path = database_url.removeprefix("sqlite:///")
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
-connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
-engine = create_engine(settings.database_url, connect_args=connect_args, pool_pre_ping=True)
+connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
+engine = create_engine(database_url, connect_args=connect_args, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
@@ -41,4 +42,3 @@ def session_scope() -> Generator[Session, None, None]:
         raise
     finally:
         db.close()
-

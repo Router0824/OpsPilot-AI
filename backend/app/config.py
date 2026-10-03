@@ -34,8 +34,16 @@ class Settings(BaseSettings):
             return "openai"
         return "demo"
 
+    @property
+    def sqlalchemy_database_url(self) -> str:
+        """Normalize provider URLs while preserving explicit SQLAlchemy drivers."""
+        if self.database_url.startswith("postgres://"):
+            return self.database_url.replace("postgres://", "postgresql+psycopg://", 1)
+        if self.database_url.startswith("postgresql://"):
+            return self.database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+        return self.database_url
+
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

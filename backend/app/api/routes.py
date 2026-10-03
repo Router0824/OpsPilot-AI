@@ -5,7 +5,7 @@ from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, select, text
 from sqlalchemy.orm import Session
 
 from .. import models
@@ -58,9 +58,10 @@ def _workspace_or_404(db: Session, workspace_id: str) -> models.Workspace:
 
 
 @router.get("/health")
-def health() -> dict:
+def health(db: Session = Depends(get_db)) -> dict:
     settings = get_settings()
-    return {"status": "ok", "mode": "demo" if settings.demo_mode or settings.provider == "demo" else "live", "provider": settings.provider}
+    db.execute(text("SELECT 1"))
+    return {"status": "ok", "mode": "demo" if settings.demo_mode or settings.provider == "demo" else "live", "provider": settings.provider, "database": db.bind.dialect.name if db.bind else "unknown"}
 
 
 @router.get("/workspaces")
